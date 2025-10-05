@@ -140,3 +140,94 @@ elif select == 'Cyclists':
 else:
     st.write(original_data.query('injured_motorists >=1')[['on_street_name', 'injured_motorists']].sort_values(
         by=['injured_motorists'], ascending=False).dropna(how='any')[:10])
+
+
+# =====================================================
+# 🕒 NEW SECTION: Collisions by Day of Week and Hour
+# =====================================================
+st.header("🕒 Collisions by Day of Week and Hour")
+
+# Extract day of week and hour
+data['day_of_week'] = data['data/time'].dt.day_name()
+data['hour'] = data['data/time'].dt.hour
+
+# Create pivot table for heatmap
+heatmap_data = data.groupby(
+    ['day_of_week', 'hour']).size().reset_index(name='collisions')
+
+# Reorder days for better display
+days_order = ["Monday", "Tuesday", "Wednesday",
+              "Thursday", "Friday", "Saturday", "Sunday"]
+heatmap_data['day_of_week'] = pd.Categorical(
+    heatmap_data['day_of_week'], categories=days_order, ordered=True)
+
+# Pivot for heatmap format
+heatmap_pivot = heatmap_data.pivot(
+    index='day_of_week', columns='hour', values='collisions').fillna(0)
+
+# Plot heatmap
+fig_heatmap = px.imshow(
+    heatmap_pivot,
+    labels=dict(x="Hour of Day", y="Day of Week", color="Collisions"),
+    x=heatmap_pivot.columns,
+    y=heatmap_pivot.index,
+    color_continuous_scale="Reds",
+    aspect="auto"
+)
+
+fig_heatmap.update_layout(
+    title="Heatmap of Collisions by Day and Hour", xaxis_nticks=24)
+
+st.plotly_chart(fig_heatmap, use_container_width=True)
+
+
+# =====================================================
+# ⚡ NEW FEATURE: Collision Severity Score Analysis
+# =====================================================
+st.header("⚡ Collision Severity Score & Top Risk Streets")
+
+# Calculate Severity Score for each collision
+data['severity_score'] = data['injured_persons'] + 3 * data['killed_persons']
+
+# Aggregate severity by street
+street_severity = data.groupby('on_street_name').agg(
+    total_collisions=('collision_id', 'count'),
+    total_injuries=('injured_persons', 'sum'),
+    total_killed=('killed_persons', 'sum'),
+    total_severity=('severity_score', 'sum')
+).reset_index()
+
+# Sort by highest severity
+top_streets = street_severity.sort_values(
+    by='total_severity', ascending=False).head(10)
+
+st.subheader("Top 10 Streets by Severity Score")
+st.write(top_streets[['on_street_name', 'total_collisions',
+         'total_injuries', 'total_killed', 'total_severity']])
+
+# Plot bar chart
+
+fig_severity = px.bar(
+    top_streets,
+    x='on_street_name',
+    y='total_severity',
+    hover_data=['total_collisions', 'total_injuries', 'total_killed'],
+    color='total_severity',
+    color_continuous_scale='Reds',
+    title='Top 10 Dangerous Streets by Collision Severity Score'
+)
+st.plotly_chart(fig_severity, use_container_width=True)
+
+# Optional: Aggregate by Borough
+borough_severity = data.groupby('borough').agg(
+    total_severity=('severity_score', 'sum')
+).sort_values(by='total_severity', ascending=False).reset_index()
+
+st.subheader("Borough-wise Severity Score")
+fig_borough = px.pie(
+    borough_severity,
+    names='borough',
+    values='total_severity',
+    title='Collision Severity Distribution by Borough'
+)
+st.plotly_chart(fig_borough, use_container_width=True)
