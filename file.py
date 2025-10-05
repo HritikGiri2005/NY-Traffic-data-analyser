@@ -2,24 +2,30 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-import plotly.graph_objects as go 
+import plotly.graph_objects as go
 import pydeck as pdk
 
 # Title
 st.title("Motor Vehicle Collisions in New York City")
-st.markdown("This is a platform for interactive analysis of vehicle collisions in NYC 🚦")
+st.markdown(
+    "This is a platform for interactive analysis of vehicle collisions in NYC 🚦")
 
 # Load dataset
 DATA_URL = ("Motor_Vehicle_Collisions_-_Crashes.csv")
 
+
 @st.cache_data(persist=True)
 def load_data(nrows):
-    data = pd.read_csv(DATA_URL, nrows=nrows, parse_dates=[['CRASH_DATE', 'CRASH_TIME']])
-    data.dropna(subset=['LATITUDE', 'LONGITUDE'], inplace=True)  # Drop Null values
-    lowercase = lambda x: str(x).lower()
+    data = pd.read_csv(DATA_URL, nrows=nrows, parse_dates=[
+                       ['CRASH_DATE', 'CRASH_TIME']])
+    data.dropna(subset=['LATITUDE', 'LONGITUDE'],
+                inplace=True)  # Drop Null values
+
+    def lowercase(x): return str(x).lower()
     data.rename(lowercase, axis='columns', inplace=True)
     data.rename(columns={'crash_date_crash_time': 'data/time'}, inplace=True)
     return data
+
 
 data = load_data(10000)
 original_data = data
@@ -31,17 +37,21 @@ if st.checkbox("Show Raw Data"):
 
 # Where are the most people injured
 st.header('📍 Where are the most people injured in New York City?')
-injured_people = st.slider('Number of persons injured in vehicle collisions', 0, 20)
-st.map(data.query('injured_persons >= @injured_people')[['latitude', 'longitude']].dropna(how='any'))
+injured_people = st.slider(
+    'Number of persons injured in vehicle collisions', 0, 20)
+st.map(data.query('injured_persons >= @injured_people')
+       [['latitude', 'longitude']].dropna(how='any'))
 
 # How many collisions occur during a given time of the day
 st.header('⏰ How many collisions occur during a given time of the day?')
 hour = st.selectbox('Hour to look at', range(0, 24), 1)
 data_hour = data[data['data/time'].dt.hour == hour]
 
-st.markdown('Vehicle Collisions between %i:00 and %i:00' % (hour, (hour+1) % 24))
+st.markdown('Vehicle Collisions between %i:00 and %i:00' %
+            (hour, (hour+1) % 24))
 
-midpoint = (np.average(data_hour['latitude']), np.average(data_hour['longitude']))
+midpoint = (np.average(data_hour['latitude']),
+            np.average(data_hour['longitude']))
 st.write(pdk.Deck(
     map_style='mapbox://styles/mapbox/light-v9',
     initial_view_state={
@@ -64,13 +74,15 @@ st.write(pdk.Deck(
     ],
 ))
 
-st.subheader('Breakdown by minute between %i:00 and %i:00' % (hour, (hour+1) % 24))
+st.subheader('Breakdown by minute between %i:00 and %i:00' %
+             (hour, (hour+1) % 24))
 filtered = data[
     (data['data/time'].dt.hour == hour) & (data['data/time'].dt.hour < (hour+1))
 ]
 hist = np.histogram(filtered['data/time'].dt.minute, bins=60, range=(0, 60))[0]
 chart_data = pd.DataFrame({'minutes': range(60), 'crashes': hist})
-fig = px.bar(chart_data, x='minutes', y='crashes', hover_data=['minutes', 'crashes'], height=400)
+fig = px.bar(chart_data, x='minutes', y='crashes',
+             hover_data=['minutes', 'crashes'], height=400)
 st.write(fig)
 
 # =====================================================
@@ -82,7 +94,8 @@ st.header("📈 Collision Trends Over Time (Monthly)")
 data['month_year'] = data['data/time'].dt.to_period('M')
 
 # Group by month-year
-monthly_trends = data.groupby('month_year').size().reset_index(name='collisions')
+monthly_trends = data.groupby(
+    'month_year').size().reset_index(name='collisions')
 monthly_trends['month_year'] = monthly_trends['month_year'].dt.to_timestamp()
 
 # Plot overall trend
@@ -110,4 +123,20 @@ fig_year = px.line(
 )
 st.plotly_chart(fig_year, use_container_width=True)
 
-#display dangerous streets of NY
+
+# display dangerous streets of NY
+st.header('Top 10 Dangerous Streets of affected type')
+select = st.selectbox('Affected type of people', [
+                      'Pedestrians', 'Cyclists', 'Motorists'])
+
+if select == 'Pedestrians':
+    st.write(original_data.query('injured_pedestrians >= 1')[['on_street_name', 'injured_pedestrians']].sort_values(
+        by=['injured_pedestrians'], ascending=False).dropna(how='any')[:10])
+
+elif select == 'Cyclists':
+    st.write(original_data.query('injured_cyclists >=1')[['on_street_name', 'injured_cyclists']].sort_values(
+        by=['injured_cyclists'], ascending=False).dropna(how='any')[:10])
+
+else:
+    st.write(original_data.query('injured_motorists >=1')[['on_street_name', 'injured_motorists']].sort_values(
+        by=['injured_motorists'], ascending=False).dropna(how='any')[:10])
